@@ -34,72 +34,78 @@ class ArchiveFile(FileObject):
         return f"Архив -> {base_str}, Сжатие: {self.compression_ratio}, Алгоритм: '{self.algorithm}'"
 
 
-def create_object_from_string(input_string):
-    parts = shlex.split(input_string)
-    obj_type = parts[0]
+def is_date_token(token):
+    return len(token) == 10 and token[4] == "." and token[7] == "."
 
-    name = ""
-    creation_date = None
-    size = 0
-    duration = None
-    compression_ratio = 0.0
-    algorithm = ""
 
-    for part in parts[1:]:
-        if part.isdigit():
-            size = int(part)
-        elif len(part) == 10 and part[4] == "." and part[7] == ".":
-            creation_date = datetime.strptime(part, "%Y.%m.%d").date()
-        elif len(part) == 5 and part[2] == ":":
-            duration = datetime.strptime(part, "%H:%M").time()
-        elif "." in part and part.replace(".", "", 1).isdigit():
-            compression_ratio = float(part)
-        else:
-            if not name:
-                name = part
-            else:
-                algorithm = part
+def is_time_token(token):
+    return len(token) == 5 and token[2] == ":"
 
+
+def is_float_token(token):
+    return "." in token and token.replace(".", "", 1).isdigit()
+
+
+def assign_token_value(token, data):
+    if token.isdigit():
+        data["size"] = int(token)
+    elif is_date_token(token):
+        data["date"] = datetime.strptime(token, "%Y.%m.%d").date()
+    elif is_time_token(token):
+        data["time"] = datetime.strptime(token, "%H:%M").time()
+    elif is_float_token(token):
+        data["float"] = float(token)
+    else:
+        data["strings"].append(token)
+
+
+def extract_properties(tokens):
+    data = {"size": 0, "date": None, "time": None, "float": 0.0, "strings": []}
+    for token in tokens:
+        assign_token_value(token, data)
+    return data
+
+
+def build_object(obj_type, data):
+    name = data["strings"][0] if len(data["strings"]) > 0 else ""
+    algo = data["strings"][1] if len(data["strings"]) > 1 else ""
     if obj_type == "Файл":
-        return FileObject(name, creation_date, size)
-    elif obj_type == "Аудиофайл":
-        return AudioFile(name, creation_date, size, duration)
-    elif obj_type == "Архив":
-        return ArchiveFile(name, creation_date, size, compression_ratio, algorithm)
+        return FileObject(name, data["date"], data["size"])
+    if obj_type == "Аудиофайл":
+        return AudioFile(name, data["date"], data["size"], data["time"])
+    if obj_type == "Архив":
+        return ArchiveFile(name, data["date"], data["size"], data["float"], algo)
     return None
 
 
+def create_object_from_string(input_string):
+    parts = shlex.split(input_string)
+    data = extract_properties(parts[1:])
+    return build_object(parts[0], data)
+
+
 def create_objects_from_multiline_string(multiline_string):
-    objects = []
-    for line in multiline_string.strip().splitlines():
-        if line.strip():
-            obj = create_object_from_string(line)
-            if obj is not None:
-                objects.append(obj)
-    return objects
+    lines = [line.strip() for line in multiline_string.splitlines() if line.strip()]
+    objects = [create_object_from_string(line) for line in lines]
+    return [obj for obj in objects if obj is not None]
 
 
 def create_objects_from_file(file_path):
     with open(file_path, "r", encoding="utf-8") as file:
-        content = file.read()
-    return create_objects_from_multiline_string(content)
+        return create_objects_from_multiline_string(file.read())
+
+
+def run_demo():
+    batch_text = (
+        'Файл "report.docx" 2024.05.12 1048576\n'
+        'Аудиофайл "track.flac" 2024.06.01 35000000 04:15\n'
+        'Архив "backup.zip" 2024.07.20 5000000 0.65 "DEFLATE"'
+    )
+    with open("test_data.txt", "w", encoding="utf-8") as f:
+        f.write(batch_text)
+    for item in create_objects_from_file("test_data.txt"):
+        print(item)
 
 
 if __name__ == "__main__":
-    batch_text = """
-    Файл "report.docx" 2024.05.12 1048576
-    Аудиофайл "track.flac" 2024.06.01 35000000 04:15
-    Архив "backup.zip" 2024.07.20 5000000 0.65 "DEFLATE"
-    """
-
-    print("--- Из многострочной строки ---")
-    for item in create_objects_from_multiline_string(batch_text):
-        print(item)
-
-    test_file = "test_data.txt"
-    with open(test_file, "w", encoding="utf-8") as f:
-        f.write(batch_text.strip())
-
-    print("\n--- Из файла ---")
-    for item in create_objects_from_file(test_file):
-        print(item)
+    run_demo()
