@@ -69,13 +69,37 @@ def create_object_from_string(input_string):
     return None
 
 
-if __name__ == "__main__":
-    test_strings = [
-        'Файл "report.docx" 2024.05.12 1048576',
-        'Аудиофайл "track.flac" 2024.06.01 35000000 04:15',
-        'Архив "backup.zip" 2024.07.20 5000000 0.65 "DEFLATE"',
-    ]
+def create_objects_from_multiline_string(multiline_string):
+    objects = []
+    for line in multiline_string.strip().splitlines():
+        if line.strip():
+            obj = create_object_from_string(line)
+            if obj is not None:
+                objects.append(obj)
+    return objects
 
-    for line in test_strings:
-        obj = create_object_from_string(line)
-        print(obj)
+
+def create_objects_from_file(file_path):
+    with open(file_path, "r", encoding="utf-8") as file:
+        content = file.read()
+    return create_objects_from_multiline_string(content)
+
+
+if __name__ == "__main__":
+    batch_text = """
+    Файл "report.docx" 2024.05.12 1048576
+    Аудиофайл "track.flac" 2024.06.01 35000000 04:15
+    Архив "backup.zip" 2024.07.20 5000000 0.65 "DEFLATE"
+    """
+
+    print("--- Из многострочной строки ---")
+    for item in create_objects_from_multiline_string(batch_text):
+        print(item)
+
+    test_file = "test_data.txt"
+    with open(test_file, "w", encoding="utf-8") as f:
+        f.write(batch_text.strip())
+
+    print("\n--- Из файла ---")
+    for item in create_objects_from_file(test_file):
+        print(item)
